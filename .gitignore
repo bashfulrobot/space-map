@@ -1,0 +1,26 @@
+# Environment files - .env is now encrypted with git-crypt
+# .env (managed by git-crypt)
+
+# Output files
+*.md
+*.html
+*.json
+*.csv
+!README.md
+!.env.example
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
