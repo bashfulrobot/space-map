@@ -1,0 +1,8 @@
+# Git-crypt configuration
+# Encrypt sensitive environment files
+
+# Encrypt the main .env file containing credentials
+.env filter=git-crypt diff=git-crypt
+
+# Keep .env.example unencrypted as it's safe to share
+.env.example !filter !diff
