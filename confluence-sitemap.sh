@@ -337,6 +337,9 @@ convert_to_confluence_storage() {
             fi
             
             local item_text="${line#*- }"
+            # Handle markdown links with titles: [text](url "title") -> <a href="url" title="title">text</a>
+            item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\) "\([^"]*\)")/<a href="\2" title="\3">\1<\/a>/g')
+            # Handle regular markdown links: [text](url) -> <a href="url">text</a>
             item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\))/<a href="\2">\1<\/a>/g')
             item_text=$(echo "$item_text" | sed 's/_\([^_]*\)_/<em>\1<\/em>/g')
             result+="<li>$item_text</li>"
@@ -348,6 +351,9 @@ convert_to_confluence_storage() {
             fi
             
             local item_text="${line#*- }"
+            # Handle markdown links with titles: [text](url "title") -> <a href="url" title="title">text</a>
+            item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\) "\([^"]*\)")/<a href="\2" title="\3">\1<\/a>/g')
+            # Handle regular markdown links: [text](url) -> <a href="url">text</a>
             item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\))/<a href="\2">\1<\/a>/g')
             item_text=$(echo "$item_text" | sed 's/_\([^_]*\)_/<em>\1<\/em>/g')
             result+="<li style=\"margin-left: 20px;\">$item_text</li>"
@@ -358,6 +364,9 @@ convert_to_confluence_storage() {
                 in_list=false
             fi
             local para_text="$line"
+            # Handle markdown links with titles: [text](url "title") -> <a href="url" title="title">text</a>
+            para_text=$(echo "$para_text" | sed 's/\[\([^]]*\)\](\([^)]*\) "\([^"]*\)")/<a href="\2" title="\3">\1<\/a>/g')
+            # Handle regular markdown links: [text](url) -> <a href="url">text</a>
             para_text=$(echo "$para_text" | sed 's/\[\([^]]*\)\](\([^)]*\))/<a href="\2">\1<\/a>/g')
             result+="<p>$para_text</p>"
         fi
@@ -801,9 +810,8 @@ format_page_info() {
     
     case "$format" in
         markdown)
-            local line="$indent- [$title]($url)"
-            
-            # Build metadata for info icon
+            # Build metadata for hover tooltip on the link itself
+            local tooltip=""
             if [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] || \
                [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] || \
                [[ "$SHOW_VERSION" == "true" && -n "$version" ]]; then
@@ -812,12 +820,18 @@ format_page_info() {
                 [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] && meta_parts+=("Modified: $last_modified")
                 [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] && meta_parts+=("Author: $author")
                 [[ "$SHOW_VERSION" == "true" && -n "$version" ]] && meta_parts+=("Version: $version")
+                [[ -n "$id" ]] && meta_parts+=("ID: $id")
                 
-                local tooltip=$(IFS=', '; echo "${meta_parts[*]}")
-                # Use simple approach with parentheses for now
-                line+=" _(${tooltip})_"
+                # Join with comma and space for single line tooltip
+                tooltip=$(IFS=', '; echo "${meta_parts[*]}")
             fi
             
+            # Create markdown link with special marker for tooltip
+            if [[ -n "$tooltip" ]]; then
+                local line="$indent- [$title]($url \"$tooltip\")"
+            else
+                local line="$indent- [$title]($url)"
+            fi
             echo "$line"
             ;;
             
