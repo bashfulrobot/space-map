@@ -54,37 +54,37 @@ error() {
 # Load .env file if it exists
 load_env_file() {
     local env_file="${1:-.env}"
-    
+
     if [[ -f "$env_file" ]]; then
         log "Loading environment variables from: $env_file"
-        
+
         # Read .env file line by line
         while IFS= read -r line || [[ -n "$line" ]]; do
             # Skip empty lines and comments
             if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
                 continue
             fi
-            
+
             # Skip lines that don't contain '='
             if [[ ! "$line" =~ = ]]; then
                 continue
             fi
-            
+
             # Extract key and value
             local key="${line%%=*}"
             local value="${line#*=}"
-            
+
             # Remove leading/trailing whitespace from key
             key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            
+
             # Remove quotes from value if present
             value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
-            
+
             # Only set if the environment variable is not already set
             if [[ -z "${!key}" ]]; then
                 export "$key"="$value"
             fi
-            
+
         done < "$env_file"
     fi
 }
@@ -121,7 +121,7 @@ PAGE UPDATE OPTIONS:
 
 ENVIRONMENT VARIABLES:
     CONFLUENCE_BASE_URL    Confluence server URL
-    CONFLUENCE_USERNAME    Username for authentication  
+    CONFLUENCE_USERNAME    Username for authentication
     CONFLUENCE_PASSWORD    Password for authentication
     CONFLUENCE_TOKEN       Personal Access Token
     SPACE_KEY             Space key to generate sitemap for
@@ -280,7 +280,7 @@ api_request() {
     local endpoint="$1"
     local auth_opts
     auth_opts=$(get_auth_opts)
-    
+
     eval curl -s -f \
         -H "'Accept: application/json'" \
         -H "'Content-Type: application/json'" \
@@ -295,7 +295,7 @@ api_request_with_data() {
     local data="$3"
     local auth_opts
     auth_opts=$(get_auth_opts)
-    
+
     # Remove -f flag to get error responses
     eval curl -s \
         -X "'$method'" \
@@ -309,11 +309,11 @@ api_request_with_data() {
 # Convert markdown content to Confluence storage format
 convert_to_confluence_storage() {
     local markdown_content="$1"
-    
+
     # Create clean, valid HTML structure manually
     local result=""
     local in_list=false
-    
+
     while IFS= read -r line; do
         if [[ -z "$line" ]]; then
             # Empty line - close list if open
@@ -335,7 +335,7 @@ convert_to_confluence_storage() {
                 result+="<ul>"
                 in_list=true
             fi
-            
+
             local item_text="${line#*- }"
             # Handle markdown links with titles: [text](url "title") -> <a href="url" title="title">text</a>
             item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\) "\([^"]*\)")/<a href="\2" title="\3">\1<\/a>/g')
@@ -349,7 +349,7 @@ convert_to_confluence_storage() {
                 result+="<ul>"
                 in_list=true
             fi
-            
+
             local item_text="${line#*- }"
             # Handle markdown links with titles: [text](url "title") -> <a href="url" title="title">text</a>
             item_text=$(echo "$item_text" | sed 's/\[\([^]]*\)\](\([^)]*\) "\([^"]*\)")/<a href="\2" title="\3">\1<\/a>/g')
@@ -371,12 +371,12 @@ convert_to_confluence_storage() {
             result+="<p>$para_text</p>"
         fi
     done <<< "$markdown_content"
-    
+
     # Close any remaining list
     if [[ "$in_list" == "true" ]]; then
         result+="</ul>"
     fi
-    
+
     echo "$result"
 }
 
@@ -384,28 +384,28 @@ convert_to_confluence_storage() {
 find_page_by_title() {
     local space_key="$1"
     local page_title="$2"
-    
+
     log "Searching for page: '$page_title' in space: $space_key"
-    
+
     # URL encode the title for the search
     local encoded_title
     encoded_title=$(echo "$page_title" | sed 's/ /%20/g')
-    
+
     local endpoint="/rest/api/content?spaceKey=${space_key}&title=${encoded_title}&expand=version"
     local response
     response=$(api_request "$endpoint")
-    
+
     if [[ $? -eq 0 ]]; then
         local page_id
         page_id=$(echo "$response" | jq -r '.results[0].id // empty')
-        
+
         if [[ -n "$page_id" ]]; then
             log "Found existing page with ID: $page_id"
             echo "$page_id"
             return 0
         fi
     fi
-    
+
     log "Page not found: '$page_title'"
     return 1
 }
@@ -413,18 +413,18 @@ find_page_by_title() {
 # Get page version number
 get_page_version() {
     local page_id="$1"
-    
+
     local endpoint="/rest/api/content/${page_id}?expand=version"
     local response
     response=$(api_request "$endpoint")
-    
+
     if [[ $? -eq 0 ]]; then
         local version
         version=$(echo "$response" | jq -r '.version.number')
         echo "$version"
         return 0
     fi
-    
+
     return 1
 }
 
@@ -434,13 +434,13 @@ create_confluence_page() {
     local page_title="$2"
     local content="$3"
     local parent_id="$4"
-    
+
     log "Creating new page: '$page_title' in space: $space_key"
-    
+
     # Convert content to storage format
     local storage_content
     storage_content=$(convert_to_confluence_storage "$content")
-    
+
     # Build the JSON payload
     local json_payload
     if [[ -n "$parent_id" ]]; then
@@ -482,10 +482,10 @@ create_confluence_page() {
                 }
             }')
     fi
-    
+
     local response
     response=$(api_request_with_data "POST" "/rest/api/content" "$json_payload")
-    
+
     if [[ $? -eq 0 ]]; then
         local page_id
         page_id=$(echo "$response" | jq -r '.id')
@@ -502,24 +502,24 @@ update_confluence_page() {
     local page_id="$1"
     local page_title="$2"
     local content="$3"
-    
+
     log "Updating existing page ID: $page_id"
-    
+
     # Get current version number
     local current_version
     current_version=$(get_page_version "$page_id")
-    
+
     if [[ $? -ne 0 ]]; then
         error "Failed to get current page version for ID: $page_id"
     fi
-    
+
     local new_version=$((current_version + 1))
     log "Updating page from version $current_version to $new_version"
-    
+
     # Convert content to Confluence storage format
     local storage_content
     storage_content=$(convert_to_confluence_storage "$content")
-    
+
     # Build the JSON payload
     local json_payload
     json_payload=$(jq -n \
@@ -537,20 +537,20 @@ update_confluence_page() {
                 }
             }
         }')
-    
+
     # Comment out debug for clean output
     # log "DEBUG: JSON payload being sent to API:"
     # echo "$json_payload" | jq . >&2
-    
+
     local response
     response=$(api_request_with_data "PUT" "/rest/api/content/${page_id}" "$json_payload")
-    
+
     # Check if curl succeeded AND if Confluence API returned success
     if [[ $? -eq 0 ]]; then
         # Check if response contains an error
         local api_error
         api_error=$(echo "$response" | jq -r '.message // empty' 2>/dev/null)
-        
+
         if [[ -n "$api_error" ]]; then
             log "API Error Response: $response"
             error "Confluence API error: $api_error"
@@ -568,29 +568,29 @@ update_confluence_page() {
 # Update or create Confluence page with sitemap
 update_confluence_sitemap_page() {
     local sitemap_content="$1"
-    
+
     if [[ "$UPDATE_PAGE" != "true" ]]; then
         return 0
     fi
-    
+
     log "Updating Confluence page with sitemap content..."
-    
+
     # Build full page content
     local full_content="$PAGE_CONTENT_PREFIX"
     full_content+="$sitemap_content"
     full_content+="$PAGE_CONTENT_SUFFIX"
-    
+
     local page_id="$PAGE_ID"
-    
+
     # If no page ID provided, try to find page by title
     if [[ -z "$page_id" ]]; then
         page_id=$(find_page_by_title "$SPACE_KEY" "$PAGE_TITLE")
         local find_result=$?
-        
+
         if [[ $find_result -ne 0 && "$CREATE_IF_NOT_EXISTS" == "true" ]]; then
             # Create new page
             page_id=$(create_confluence_page "$SPACE_KEY" "$PAGE_TITLE" "$full_content" "$PARENT_PAGE_ID")
-            
+
             if [[ $? -eq 0 ]]; then
                 log "Successfully created new sitemap page with ID: $page_id"
                 log "Page URL: ${CONFLUENCE_BASE_URL}/pages/viewpage.action?pageId=$page_id"
@@ -600,11 +600,11 @@ update_confluence_sitemap_page() {
             error "Page not found and CREATE_IF_NOT_EXISTS is false"
         fi
     fi
-    
+
     # Update existing page
     if [[ -n "$page_id" ]]; then
         update_confluence_page "$page_id" "$PAGE_TITLE" "$full_content"
-        
+
         if [[ $? -eq 0 ]]; then
             log "Successfully updated sitemap page with ID: $page_id"
             log "Page URL: ${CONFLUENCE_BASE_URL}/pages/viewpage.action?pageId=$page_id"
@@ -615,10 +615,10 @@ update_confluence_sitemap_page() {
 # Detect Confluence API version
 detect_api_version() {
     log "Detecting Confluence API version..."
-    
+
     local version_info
     version_info=$(api_request "/rest/api/space")
-    
+
     if [[ $? -eq 0 ]]; then
         log "Successfully connected to Confluence REST API"
         return 0
@@ -630,40 +630,40 @@ detect_api_version() {
 # Get all pages in the space
 get_space_pages() {
     log "Fetching pages for space: $SPACE_KEY"
-    
+
     local all_pages=()
     local start=0
     local has_more=true
-    
+
     while [[ "$has_more" == "true" ]]; do
         local endpoint="/rest/api/content?spaceKey=${SPACE_KEY}&type=page&limit=${API_LIMIT}&start=${start}&expand=${EXPAND_FIELDS}"
         local response
         response=$(api_request "$endpoint")
-        
+
         if [[ $? -ne 0 ]]; then
             error "Failed to fetch pages from API"
         fi
-        
+
         # Check if we have more results
         local size
         size=$(echo "$response" | jq -r '.size // 0')
         local limit
         limit=$(echo "$response" | jq -r '.limit // 0')
-        
+
         if [[ "$size" -lt "$limit" ]]; then
             has_more=false
         else
             start=$((start + limit))
         fi
-        
+
         # Extract pages from response
         local pages
         pages=$(echo "$response" | jq -r '.results[]')
         all_pages+=("$pages")
-        
+
         log "Fetched $size pages (total so far: ${#all_pages[@]})"
     done
-    
+
     # Combine all pages into a single JSON array
     printf '%s\n' "${all_pages[@]}" | jq -s '.'
 }
@@ -671,35 +671,35 @@ get_space_pages() {
 # Build page hierarchy
 build_hierarchy() {
     local pages="$1"
-    
+
     # Create a map of page ID to page data
     local page_map="{}"
     local root_pages=()
-    
+
     # First pass: create page map and identify root pages
     while IFS= read -r page; do
         local id
         id=$(echo "$page" | jq -r '.id')
-        
+
         page_map=$(echo "$page_map" | jq --argjson page "$page" '. + {($page.id): $page}')
-        
+
         # Check if page has ancestors (not a root page)
         local has_ancestors
         has_ancestors=$(echo "$page" | jq -r '.ancestors | length > 0')
-        
+
         if [[ "$has_ancestors" == "false" ]]; then
             root_pages+=("$id")
         fi
-        
+
     done < <(echo "$pages" | jq -c '.[]')
-    
+
     # Build children map
     local children_map="{}"
     while IFS= read -r page; do
         local id parent_id
         id=$(echo "$page" | jq -r '.id')
         parent_id=$(echo "$page" | jq -r '.ancestors[-1].id // empty')
-        
+
         if [[ -n "$parent_id" ]]; then
             children_map=$(echo "$children_map" | jq --arg parent "$parent_id" --arg child "$id" '
                 if .[$parent] then
@@ -709,9 +709,9 @@ build_hierarchy() {
                 end
             ')
         fi
-        
+
     done < <(echo "$pages" | jq -c '.[]')
-    
+
     # Return both page map and children map as JSON
     jq -n --argjson pages "$page_map" --argjson children "$children_map" --argjson roots "$(printf '%s\n' "${root_pages[@]}" | jq -R . | jq -s .)" '{pages: $pages, children: $children, roots: $roots}'
 }
@@ -722,24 +722,24 @@ render_page_hierarchy() {
     local page_id="$2"
     local indent_level="$3"
     local format="$4"
-    
+
     # Get page data
     local page
     page=$(echo "$hierarchy" | jq -r --arg id "$page_id" '.pages[$id]')
-    
+
     if [[ "$page" == "null" ]]; then
         return
     fi
-    
+
     # Format this page
     local formatted_page
     formatted_page=$(format_page_info "$page" "$indent_level" "$format")
     echo "$formatted_page"
-    
+
     # Get children and render them
     local children
     children=$(echo "$hierarchy" | jq -r --arg id "$page_id" '.children[$id] // []')
-    
+
     if [[ "$children" != "[]" ]]; then
         while IFS= read -r child_id; do
             if [[ -n "$child_id" && "$child_id" != "null" ]]; then
@@ -756,28 +756,28 @@ render_json_hierarchy() {
     local indent_level="$3"
     local output_file="$4"
     local is_first="$5"
-    
+
     # Get page data
     local page
     page=$(echo "$hierarchy" | jq -r --arg id "$page_id" '.pages[$id]')
-    
+
     if [[ "$page" == "null" ]]; then
         return
     fi
-    
+
     # Format this page for JSON
     local formatted_page
     formatted_page=$(format_page_info "$page" "$indent_level" "json")
-    
+
     if [[ "$is_first" != "true" ]]; then
         echo "," >> "$output_file"
     fi
     echo -n "    $formatted_page" >> "$output_file"
-    
+
     # Get children and render them
     local children
     children=$(echo "$hierarchy" | jq -r --arg id "$page_id" '.children[$id] // []')
-    
+
     if [[ "$children" != "[]" ]]; then
         while IFS= read -r child_id; do
             if [[ -n "$child_id" && "$child_id" != "null" ]]; then
@@ -793,7 +793,7 @@ format_page_info() {
     local page="$1"
     local indent_level="$2"
     local format="$3"
-    
+
     local id title url last_modified author version
     id=$(echo "$page" | jq -r '.id')
     title=$(echo "$page" | jq -r '.title')
@@ -801,13 +801,13 @@ format_page_info() {
     last_modified=$(echo "$page" | jq -r '.version.when // ""')
     author=$(echo "$page" | jq -r '.version.by.displayName // ""')
     version=$(echo "$page" | jq -r '.version.number // ""')
-    
+
     # Create indentation
     local indent=""
     for ((i=0; i<indent_level; i++)); do
         indent+="$INDENT_CHAR"
     done
-    
+
     case "$format" in
         markdown)
             # Build metadata for hover tooltip on the link itself
@@ -815,17 +815,17 @@ format_page_info() {
             if [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] || \
                [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] || \
                [[ "$SHOW_VERSION" == "true" && -n "$version" ]]; then
-                
+
                 local meta_parts=()
                 [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] && meta_parts+=("Modified: $last_modified")
                 [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] && meta_parts+=("Author: $author")
                 [[ "$SHOW_VERSION" == "true" && -n "$version" ]] && meta_parts+=("Version: $version")
                 [[ -n "$id" ]] && meta_parts+=("ID: $id")
-                
+
                 # Join with comma and space for single line tooltip
                 tooltip=$(IFS=', '; echo "${meta_parts[*]}")
             fi
-            
+
             # Create markdown link with special marker for tooltip
             if [[ -n "$tooltip" ]]; then
                 local line="$indent- [$title]($url \"$tooltip\")"
@@ -834,31 +834,31 @@ format_page_info() {
             fi
             echo "$line"
             ;;
-            
+
         html)
             local line="$indent<li><a href=\"$url\">$title</a>"
-            
+
             if [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] || \
                [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] || \
                [[ "$SHOW_VERSION" == "true" && -n "$version" ]]; then
-                
+
                 local meta_parts=()
                 [[ "$SHOW_LAST_MODIFIED" == "true" && -n "$last_modified" ]] && meta_parts+=("Modified: $last_modified")
                 [[ "$SHOW_AUTHOR" == "true" && -n "$author" ]] && meta_parts+=("Author: $author")
                 [[ "$SHOW_VERSION" == "true" && -n "$version" ]] && meta_parts+=("Version: $version")
-                
+
                 local tooltip=$(IFS=$'\n'; echo "${meta_parts[*]}")
                 line+=" <span class=\"info-icon\" title=\"$tooltip\">ℹ️</span>"
             fi
-            
+
             line+="</li>"
             echo "$line"
             ;;
-            
+
         csv)
             echo "\"$title\",\"$url\",\"$last_modified\",\"$author\",\"$version\",\"$indent_level\""
             ;;
-            
+
         json)
             jq -n --arg title "$title" \
                   --arg url "$url" \
@@ -875,9 +875,9 @@ format_page_info() {
 generate_sitemap_content() {
     local pages="$1"
     local format="$2"
-    
+
     local content=""
-    
+
     # Initialize content based on format
     case "$format" in
         markdown)
@@ -885,19 +885,19 @@ generate_sitemap_content() {
             content+=""$'\n'
             content+="Generated on: $(date)"$'\n'
             content+="Space: [$SPACE_KEY]($CONFLUENCE_BASE_URL/display/$SPACE_KEY)"$'\n'
-            content+="Generated by: [Confluence Space Sitemap Generator](https://github.com/bashfulrobot/space-map)"$'\n'
+            content+="Generated by: [Space Map](https://github.com/bashfulrobot/space-map)"$'\n'
             content+=""$'\n'
             ;;
     esac
-    
+
     # Build hierarchy
     local hierarchy
     hierarchy=$(build_hierarchy "$pages")
-    
+
     # Get root pages and render hierarchy
     local root_pages
     root_pages=$(echo "$hierarchy" | jq -r '.roots[]')
-    
+
     while IFS= read -r root_id; do
         if [[ -n "$root_id" && "$root_id" != "null" ]]; then
             local hierarchy_content
@@ -905,7 +905,7 @@ generate_sitemap_content() {
             content+="$hierarchy_content"$'\n'
         fi
     done <<< "$root_pages"
-    
+
     echo "$content"
 }
 
@@ -914,9 +914,9 @@ generate_sitemap() {
     local pages="$1"
     local output_file="$2"
     local format="$3"
-    
+
     log "Generating sitemap in $format format..."
-    
+
     # Initialize output file
     case "$format" in
         markdown)
@@ -929,7 +929,7 @@ generate_sitemap() {
                 echo ""
             } > "$output_file"
             ;;
-            
+
         html)
             {
                 echo "<!DOCTYPE html>"
@@ -950,11 +950,11 @@ generate_sitemap() {
                 echo "<ul>"
             } > "$output_file"
             ;;
-            
+
         csv)
             echo "Title,URL,Last Modified,Author,Version,Level" > "$output_file"
             ;;
-            
+
         json)
             {
                 echo "{"
@@ -965,17 +965,17 @@ generate_sitemap() {
             } > "$output_file"
             ;;
     esac
-    
+
     # Build hierarchy and process pages
     local hierarchy
     hierarchy=$(build_hierarchy "$pages")
-    
+
     # Get root pages and render hierarchy
     local root_pages
     root_pages=$(echo "$hierarchy" | jq -r '.roots[]')
-    
+
     local first_json_item=true
-    
+
     while IFS= read -r root_id; do
         if [[ -n "$root_id" && "$root_id" != "null" ]]; then
             case "$format" in
@@ -992,7 +992,7 @@ generate_sitemap() {
             esac
         fi
     done <<< "$root_pages"
-    
+
     # Finalize output file
     case "$format" in
         html)
@@ -1001,7 +1001,7 @@ generate_sitemap() {
                 echo "</body></html>"
             } >> "$output_file"
             ;;
-            
+
         json)
             {
                 echo ""
@@ -1010,7 +1010,7 @@ generate_sitemap() {
             } >> "$output_file"
             ;;
     esac
-    
+
     log "Sitemap generated successfully: $output_file"
 }
 
@@ -1020,23 +1020,23 @@ generate_sitemap() {
 
 main() {
     log "Starting Confluence Space Sitemap Generator"
-    
+
     # Load environment variables from .env file if it exists
     load_env_file
-    
+
     # Parse command line arguments
     parse_args "$@"
-    
+
     # Validate configuration
     validate_config
-    
+
     # Detect API version and connectivity
     detect_api_version
-    
+
     # Get all pages in the space
     local pages
     pages=$(get_space_pages)
-    
+
     # Generate the sitemap
     if [[ "$UPDATE_PAGE" == "true" ]]; then
         # Generate sitemap content for page update
@@ -1050,7 +1050,7 @@ main() {
             sitemap_content=$(generate_sitemap_content "$pages" "markdown")
             update_confluence_sitemap_page "$sitemap_content"
         fi
-        
+
         # Still generate file output if requested
         if [[ "$OUTPUT_FILE" != "/dev/null" && "$OUTPUT_FILE" != "" ]]; then
             generate_sitemap "$pages" "$OUTPUT_FILE" "$OUTPUT_FORMAT"
@@ -1061,9 +1061,9 @@ main() {
         generate_sitemap "$pages" "$OUTPUT_FILE" "$OUTPUT_FORMAT"
         log "Output saved to: $OUTPUT_FILE"
     fi
-    
+
     log "Sitemap generation completed successfully!"
-    
+
     # Show basic stats
     local page_count
     page_count=$(echo "$pages" | jq 'length')
